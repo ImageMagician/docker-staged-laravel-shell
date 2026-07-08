@@ -1,0 +1,29 @@
+# Host-built dependencies — the image builds its own in isolated stages.
+src/node_modules
+src/vendor
+ 
+# Build outputs — regenerated inside the image.
+src/public/build
+src/public/hot
+ 
+# Secrets and local state — never bake these into an image.
+src/.env
+src/.env.*
+!src/.env.example
+ 
+# Laravel local runtime files.
+src/storage/logs/*
+src/storage/framework/cache/*
+src/storage/framework/sessions/*
+src/storage/framework/views/*
+
+# Bootstrap cache
+src/bootstrap/cache/*
+!src/bootstrap/cache/.gitignore
+ 
+# VCS / editor noise.
+**/.git
+**/.gitignore
+**/.idea
+**/*.md
+ 

@@ -1,0 +1,55 @@
+name: compose-prod
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile.prod
+      target: runtime
+    working_dir: /var/www
+    restart: unless-stopped
+    env_file: .env.prod
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    networks:
+      - laravel
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile.prod
+      target: web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - app
+    networks:
+      - laravel
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    env_file: .env.prod
+
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - laravel
+
+volumes:
+  mysql-data:
+
+networks:
+  laravel:
+    driver: bridge

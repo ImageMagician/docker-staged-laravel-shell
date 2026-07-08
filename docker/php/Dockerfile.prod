@@ -1,0 +1,91 @@
+# syntax=docker/dockerfile:1
+
+##############################################################
+# Stage 1 — PHP dependencies. Has Composer; produces vendor/.
+##############################################################
+FROM composer:2 AS vendor
+
+WORKDIR /app
+
+# Copy only the dependency manifests first. If these two files don't
+# change, Docker reuses the cached install layer on later builds.
+COPY src/composer.json src/composer.lock ./
+
+# Production install: no dev packages, no scripts yet (app code isn't
+# here to run artisan against), just download the packages.
+RUN composer install \
+        --no-dev \
+        --no-scripts \
+        --no-autoloader \
+        --prefer-dist \
+        --no-interaction
+
+# Now bring in the full app and build the optimized autoloader.
+COPY src/ ./
+RUN composer dump-autoload --optimize --no-dev
+
+
+##############################################################
+# Stage 2 — Frontend assets. Has Node; produces public/build/.
+##############################################################
+FROM node:22-alpine AS assets
+
+WORKDIR /app
+
+# Same caching trick: lockfiles first, then a clean install.
+COPY src/package.json src/package-lock.json ./
+RUN npm ci
+
+# Copy the source and compile Vite -> public/build/ (with manifest.json).
+COPY src/ ./
+RUN npm run build
+
+
+##############################################################
+# Stage 3 — Application image. PHP-FPM ONLY. No Composer, no Node.
+##############################################################
+FROM php:8.4-fpm AS runtime
+
+# Runtime PHP extensions. Build headers are pulled in, used, then
+# purged in the same layer so they don't bloat the final image.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpng-dev libjpeg-dev libfreetype6-dev \
+        libonig-dev libxml2-dev libzip-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j"$(nproc)" \
+        pdo_mysql mbstring exif pcntl bcmath gd zip \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /var/www
+
+# Application source (node_modules/vendor/.env excluded via .dockerignore).
+COPY src/ ./
+
+# Pull ONLY the build outputs from the earlier stages.
+COPY --from=vendor /app/vendor ./vendor
+COPY --from=assets /app/public/build ./public/build
+
+# Startup script that caches config/routes/views with real env present.
+COPY --chmod=0755 docker/php/entrypoint.prod.sh /usr/local/bin/entrypoint
+
+# Laravel needs these two directories writable at runtime.
+RUN chown -R www-data:www-data storage bootstrap/cache
+
+USER www-data
+
+EXPOSE 9000
+ENTRYPOINT ["entrypoint"]
+
+CMD ["php-fpm"]
+
+##############################################################
+# Stage 4 — Web image (target: web). Nginx with baked assets.
+##############################################################
+FROM nginx:1.27-alpine AS web
+ 
+# Pull the compiled public/ (incl. build/manifest.json) out of the
+# app stage. This is why nginx can serve the static files.
+COPY --from=runtime /var/www/public /var/www/public
+COPY docker/nginx/prod.conf /etc/nginx/conf.d/default.conf
+ 
+EXPOSE 80

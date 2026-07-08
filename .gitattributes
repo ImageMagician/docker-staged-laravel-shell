@@ -1,0 +1,17 @@
+# Normalize everything to LF in the repository by default.
+* text=auto eol=lf
+
+# Files that MUST stay LF — they're read by Linux containers.
+*.sh        text eol=lf
+*.conf      text eol=lf
+Dockerfile* text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.ini       text eol=lf
+.env*       text eol=lf
+
+# Binary files — never touch line endings.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

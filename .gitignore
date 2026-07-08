@@ -1,0 +1,21 @@
+# Secrets — never commit
+.env
+.env.prod
+.env.*.local
+
+# Host-built dependencies and generated artifacts
+/src/vendor
+/src/node_modules
+/src/.env
+/src/public/build
+/src/public/hot
+/src/storage/*.key
+/src/bootstrap/cache/*
+!/src/bootstrap/cache/.gitignore
+
+# Keep the empty src/ in the template
+!/src/.gitkeep
+
+# PHPStorm specific ignore
+/.idea
+ 
